@@ -1,0 +1,4 @@
+./bin/spark-submit --class com.spark.wordcount.WordCount $GIT_DIR/spark-demo/target/spark-demo-0.0.1-SNAPSHOT.jar /tmp/readme.txt
+
+
+./bin/spark-submit --class com.spark.uberanalytics.MaxTrip $GIT_DIR/spark-demo/target/spark-demo-0.0.1-SNAPSHOT.jar /tmp/uber
