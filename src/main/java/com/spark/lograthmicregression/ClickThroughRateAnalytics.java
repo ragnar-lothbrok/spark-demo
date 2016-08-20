@@ -50,7 +50,7 @@ public class ClickThroughRateAnalytics {
 
 			SQLContext sqlContext = new SQLContext(javaSparkContext);
 			DataFrame dataFrame = sqlContext.read().format("com.databricks.spark.csv").option("inferSchema", "true").option("header", "true")
-					.load("/home/raghunandangupta/Downloads/splits/train");
+					.load("/home/raghunandangupta/Downloads/splits/sub-testtaa");
 
 			// This will keep data in memory
 			dataFrame.cache();
@@ -101,13 +101,14 @@ public class ClickThroughRateAnalytics {
 			// Normalizer normalizer = new
 			// Normalizer().setInputCol("features_index").setOutputCol("features");
 
-			dataFrame = dataFrame.drop("app_category_index").drop("app_domain_index").drop("hour").drop("C20_index")
-					.drop("device_connection_type_index").drop("C1_index").drop("id").drop("device_ip_index").drop("banner_pos_index");
 
 			StringIndexerModel stringIndexerModel = new StringIndexer().setInputCol("click").setOutputCol("indexedclick").fit(dataFrame);
 			dataFrame = stringIndexerModel.transform(dataFrame);
 			dataFrame.printSchema();
 
+			dataFrame = dataFrame.drop("app_category_index").drop("app_domain_index").drop("hour").drop("C20_index")
+					.drop("device_connection_type_index").drop("C1_index").drop("id").drop("device_ip_index").drop("banner_pos_index").drop("click");
+			
 			// Get predictor variable names
 			String[] predictors = dataFrame.columns();
 			predictors = (String[]) ArrayUtils.removeElement(predictors, "indexedclick");
@@ -128,6 +129,7 @@ public class ClickThroughRateAnalytics {
 			PipelineModel model = pipeline.fit(trainingData);
 			DataFrame predictions = model.transform(testData);
 
+			predictions.show(50);
 			predictions = predictions.select("predictedLabel", "indexedclick");
 			JavaRDD<Tuple2<Object, Object>> predictionAndLabels = predictions.javaRDD().map(new Function<Row, Tuple2<Object, Object>>() {
 				private static final long serialVersionUID = 1L;
@@ -142,7 +144,7 @@ public class ClickThroughRateAnalytics {
 			Matrix confusion = metrics.confusionMatrix();
 			System.out.println("Confusion matrix: \n" + confusion);
 
-			GBTClassificationModel gbtModel = (GBTClassificationModel) (model.stages()[2]);
+			GBTClassificationModel gbtModel = (GBTClassificationModel) (model.stages()[0]);
 			System.out.println("Learned classification GBT model:\n" + gbtModel.toDebugString());
 
 		}
