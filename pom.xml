@@ -6,13 +6,18 @@
 	<version>0.0.1-SNAPSHOT</version>
 
 	<dependencies>
-		<!-- https://mvnrepository.com/artifact/org.apache.spark/spark-core_2.10 -->
+		<!-- https://mvnrepository.com/artifact/org.apache.spark/spark-mllib_2.10 -->
 		<dependency>
 			<groupId>org.apache.spark</groupId>
-			<artifactId>spark-core_2.11</artifactId>
-			<version>1.6.2</version>
+			<artifactId>spark-mllib_2.10</artifactId>
+			<version>1.6.1</version>
 		</dependency>
-
+		<!-- https://mvnrepository.com/artifact/com.databricks/spark-csv_2.10 -->
+		<dependency>
+			<groupId>com.databricks</groupId>
+			<artifactId>spark-csv_2.10</artifactId>
+			<version>1.4.0</version>
+		</dependency>
 	</dependencies>
 
 	<build>
