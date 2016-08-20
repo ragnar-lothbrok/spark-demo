@@ -7,19 +7,24 @@ import java.util.Date;
 import java.util.HashSet;
 import java.util.Set;
 
+import org.apache.commons.lang.ArrayUtils;
 import org.apache.spark.SparkConf;
+import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
+import org.apache.spark.api.java.function.Function;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineModel;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.classification.GBTClassificationModel;
 import org.apache.spark.ml.classification.GBTClassifier;
-import org.apache.spark.ml.evaluation.MulticlassClassificationEvaluator;
 import org.apache.spark.ml.feature.IndexToString;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.StringIndexerModel;
 import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.mllib.evaluation.MulticlassMetrics;
+import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
+import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
 import org.apache.spark.sql.catalyst.expressions.AttributeReference;
 import org.apache.spark.sql.catalyst.expressions.Expression;
@@ -28,6 +33,7 @@ import org.apache.spark.sql.types.DataTypes;
 
 import com.google.common.collect.ImmutableMap;
 
+import scala.Tuple2;
 import scala.collection.mutable.Seq;
 
 //https://github.com/yu-iskw/click-through-rate-prediction
@@ -44,37 +50,36 @@ public class ClickThroughRateAnalytics {
 
 			SQLContext sqlContext = new SQLContext(javaSparkContext);
 			DataFrame dataFrame = sqlContext.read().format("com.databricks.spark.csv").option("inferSchema", "true").option("header", "true")
-					.load("/splits/sub-suaa");
+					.load("/home/raghunandangupta/Downloads/splits/train");
 
 			// This will keep data in memory
 			dataFrame.cache();
 
 			// This will describe the column
-			// dataFrame.describe("hour").show();
+			dataFrame.describe("hour").show();
 
 			System.out.println("Rows before removing missing data : " + dataFrame.count());
 
 			// This will describe column details
-			// dataFrame.describe("click", "hour", "site_domain").show();
+			dataFrame.describe("click", "hour", "site_domain").show();
 
 			// This will calculate variance between columns +ve one increases
 			// second increases and -ve means one increases other decreases
-			// double cov = dataFrame.stat().cov("click", "hour");
-			// System.out.println("cov : " + cov);
+			double cov = dataFrame.stat().cov("click", "hour");
+			System.out.println("cov : " + cov);
 
 			// It provides quantitative measurements of the statistical
 			// dependence between two random variables
-			// double corr = dataFrame.stat().corr("click", "hour");
-			// System.out.println("corr : " + corr);
+			double corr = dataFrame.stat().corr("click", "hour");
+			System.out.println("corr : " + corr);
 
 			// Cross Tabulation provides a table of the frequency distribution
 			// for a set of variables
-			// dataFrame.stat().crosstab("site_id", "site_domain").show();
+			dataFrame.stat().crosstab("site_id", "site_domain").show();
 
 			// For frequent items
 			// System.out.println("Frequest Items : " +
-			// dataFrame.stat().freqItems(new String[] { "site_id",
-			// "site_domain" }, 0.3).collectAsList());
+			dataFrame.stat().freqItems(new String[] { "site_id", "site_domain" }, 0.3).collectAsList();
 
 			// TODO we can also set maximum occurring item to categorical
 			// values.
@@ -96,49 +101,51 @@ public class ClickThroughRateAnalytics {
 			// Normalizer normalizer = new
 			// Normalizer().setInputCol("features_index").setOutputCol("features");
 
-			dataFrame = dataFrame.drop("app_category_index").drop("app_domain_index").drop("hour_index").drop("C20_index")
+			dataFrame = dataFrame.drop("app_category_index").drop("app_domain_index").drop("hour").drop("C20_index")
 					.drop("device_connection_type_index").drop("C1_index").drop("id").drop("device_ip_index").drop("banner_pos_index");
+
+			StringIndexerModel stringIndexerModel = new StringIndexer().setInputCol("click").setOutputCol("indexedclick").fit(dataFrame);
+			dataFrame = stringIndexerModel.transform(dataFrame);
+			dataFrame.printSchema();
+
+			// Get predictor variable names
+			String[] predictors = dataFrame.columns();
+			predictors = (String[]) ArrayUtils.removeElement(predictors, "indexedclick");
+
+			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(predictors).setOutputCol("features_index");
+			dataFrame = vectorAssembler.transform(dataFrame);
+
 			DataFrame[] splits = dataFrame.randomSplit(new double[] { 0.7, 0.3 });
 			DataFrame trainingData = splits[0];
 			DataFrame testData = splits[1];
+			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(10).setMaxBins(60000)
+					.setMaxDepth(30).setMinInfoGain(0.0001).setStepSize(0.00001);
 
-			StringIndexerModel labelIndexer = new StringIndexer().setInputCol("click").setOutputCol("indexedclick").fit(dataFrame);
-			// Here we will be sending all columns which will participate in
-			// prediction
-			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(findPredictionColumns("click", dataFrame))
-					.setOutputCol("features_index");
+			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("predictedLabel")
+					.setLabels(stringIndexerModel.labels());
 
-			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(10).setMaxBins(69000);
-
-			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("predictedLabel");
-			Pipeline pipeline = new Pipeline().setStages(new PipelineStage[] { labelIndexer, vectorAssembler, gbt, labelConverter });
-
-			trainingData.show(1);
+			Pipeline pipeline = new Pipeline().setStages(new PipelineStage[] { gbt, labelConverter });
 			PipelineModel model = pipeline.fit(trainingData);
 			DataFrame predictions = model.transform(testData);
-			predictions.select("predictedLabel", "label").show(5);
-			MulticlassClassificationEvaluator evaluator = new MulticlassClassificationEvaluator().setLabelCol("indexedLabel")
-					.setPredictionCol("prediction").setMetricName("precision");
-			double accuracy = evaluator.evaluate(predictions);
-			System.out.println("Test Error = " + (1.0 - accuracy));
+
+			predictions = predictions.select("predictedLabel", "indexedclick");
+			JavaRDD<Tuple2<Object, Object>> predictionAndLabels = predictions.javaRDD().map(new Function<Row, Tuple2<Object, Object>>() {
+				private static final long serialVersionUID = 1L;
+				@Override
+				public Tuple2<Object, Object> call(Row v1) throws Exception {
+					return new Tuple2<Object, Object>(Double.parseDouble(v1.get(0).toString()), Double.parseDouble(v1.get(1).toString()));
+				}
+			});
+			// Get evaluation metrics.
+			MulticlassMetrics metrics = new MulticlassMetrics(predictionAndLabels.rdd());
+			// Confusion matrix
+			Matrix confusion = metrics.confusionMatrix();
+			System.out.println("Confusion matrix: \n" + confusion);
 
 			GBTClassificationModel gbtModel = (GBTClassificationModel) (model.stages()[2]);
-
 			System.out.println("Learned classification GBT model:\n" + gbtModel.toDebugString());
 
 		}
-	}
-
-	private static String[] findPredictionColumns(String outputCol, DataFrame dataFrame) {
-		String columns[] = dataFrame.columns();
-		String inputColumns[] = new String[columns.length - 1];
-		int count = 0;
-		for (String column : dataFrame.columns()) {
-			if (!column.equalsIgnoreCase(outputCol)) {
-				inputColumns[count++] = column;
-			}
-		}
-		return inputColumns;
 	}
 
 	/**
