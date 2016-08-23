@@ -12,15 +12,22 @@ import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaRDD;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
+import org.apache.spark.ml.Model;
 import org.apache.spark.ml.Pipeline;
 import org.apache.spark.ml.PipelineModel;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.classification.GBTClassificationModel;
 import org.apache.spark.ml.classification.GBTClassifier;
+import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator;
 import org.apache.spark.ml.feature.IndexToString;
+import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.StringIndexerModel;
 import org.apache.spark.ml.feature.VectorAssembler;
+import org.apache.spark.ml.param.ParamMap;
+import org.apache.spark.ml.tuning.CrossValidator;
+import org.apache.spark.ml.tuning.CrossValidatorModel;
+import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
@@ -33,6 +40,7 @@ import org.apache.spark.sql.types.DataTypes;
 
 import com.google.common.collect.ImmutableMap;
 
+import ml.dmlc.xgboost4j.java.XGBoostError;
 import scala.Tuple2;
 import scala.collection.mutable.Seq;
 
@@ -42,8 +50,8 @@ public class ClickThroughRateAnalytics {
 
 	private static SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHH");
 
-	public static void main(String[] args) {
-
+	public static void main(String[] args) throws XGBoostError {
+		
 		final SparkConf sparkConf = new SparkConf().setAppName("Click Analysis").setMaster("local");
 
 		try (JavaSparkContext javaSparkContext = new JavaSparkContext(sparkConf)) {
@@ -101,14 +109,12 @@ public class ClickThroughRateAnalytics {
 			// Normalizer normalizer = new
 			// Normalizer().setInputCol("features_index").setOutputCol("features");
 
-
 			StringIndexerModel stringIndexerModel = new StringIndexer().setInputCol("click").setOutputCol("indexedclick").fit(dataFrame);
 			dataFrame = stringIndexerModel.transform(dataFrame);
 			dataFrame.printSchema();
 
-			dataFrame = dataFrame.drop("app_category_index").drop("app_domain_index").drop("hour").drop("C20_index")
-					.drop("device_connection_type_index").drop("C1_index").drop("id").drop("device_ip_index").drop("banner_pos_index").drop("click");
-			
+			dataFrame = dataFrame.drop("id").drop("click").drop("device_ip_index");
+
 			// Get predictor variable names
 			String[] predictors = dataFrame.columns();
 			predictors = (String[]) ArrayUtils.removeElement(predictors, "indexedclick");
@@ -116,38 +122,55 @@ public class ClickThroughRateAnalytics {
 			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(predictors).setOutputCol("features_index");
 			dataFrame = vectorAssembler.transform(dataFrame);
 
+			dataFrame = dataFrame.select("indexedclick", "features_index").cache();
 			DataFrame[] splits = dataFrame.randomSplit(new double[] { 0.7, 0.3 });
 			DataFrame trainingData = splits[0];
 			DataFrame testData = splits[1];
-			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(10).setMaxBins(60000)
-					.setMaxDepth(30).setMinInfoGain(0.0001).setStepSize(0.00001);
+			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(20).setMaxBins(26900)
+					.setMaxDepth(20).setMinInfoGain(0.0001).setStepSize(0.00001).setSeed(200).setLossType("logistic").setSubsamplingRate(0.2);
 
-			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("predictedLabel")
+			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("rawPrediction")
 					.setLabels(stringIndexerModel.labels());
 
 			Pipeline pipeline = new Pipeline().setStages(new PipelineStage[] { gbt, labelConverter });
-			PipelineModel model = pipeline.fit(trainingData);
-			DataFrame predictions = model.transform(testData);
 
-			predictions.show(50);
-			predictions = predictions.select("predictedLabel", "indexedclick");
-			JavaRDD<Tuple2<Object, Object>> predictionAndLabels = predictions.javaRDD().map(new Function<Row, Tuple2<Object, Object>>() {
-				private static final long serialVersionUID = 1L;
-				@Override
-				public Tuple2<Object, Object> call(Row v1) throws Exception {
-					return new Tuple2<Object, Object>(Double.parseDouble(v1.get(0).toString()), Double.parseDouble(v1.get(1).toString()));
-				}
-			});
-			// Get evaluation metrics.
-			MulticlassMetrics metrics = new MulticlassMetrics(predictionAndLabels.rdd());
-			// Confusion matrix
-			Matrix confusion = metrics.confusionMatrix();
-			System.out.println("Confusion matrix: \n" + confusion);
+			// Cross validator
+			BinaryClassificationEvaluator binaryClassificationEvaluator = new BinaryClassificationEvaluator();
+			ParamMap[] paramMaps = new ParamGridBuilder().build();
+			CrossValidator crossValidator = new CrossValidator().setEvaluator(binaryClassificationEvaluator).setNumFolds(3)
+					.setEstimatorParamMaps(paramMaps).setEstimator(pipeline);
+			CrossValidatorModel crossValidatorModel = crossValidator.fit(trainingData);
 
-			GBTClassificationModel gbtModel = (GBTClassificationModel) (model.stages()[0]);
-			System.out.println("Learned classification GBT model:\n" + gbtModel.toDebugString());
+			PipelineModel pipelineModel = pipeline.fit(trainingData);
+
+			predictions(pipelineModel, testData);
+			predictions(crossValidatorModel, testData);
+
+			GBTClassificationModel gbtModel = (GBTClassificationModel) (pipelineModel.stages()[0]);
+			// System.out.println("Learned classification GBT model:\n" +
+			// gbtModel.toDebugString());
 
 		}
+	}
+
+	private static void predictions(Model model, DataFrame testData) {
+		DataFrame predictions = model.transform(testData);
+		predictions = predictions.select("rawPrediction", "indexedclick");
+		JavaRDD<Tuple2<Object, Object>> predictionAndLabels = predictions.javaRDD().map(new Function<Row, Tuple2<Object, Object>>() {
+			private static final long serialVersionUID = 1L;
+
+			@Override
+			public Tuple2<Object, Object> call(Row v1) throws Exception {
+				return new Tuple2<Object, Object>(Double.parseDouble(v1.get(0).toString()), Double.parseDouble(v1.get(1).toString()));
+			}
+		});
+		// Get evaluation metrics.
+		MulticlassMetrics metrics = new MulticlassMetrics(predictionAndLabels.rdd());
+		// Confusion matrix
+		Matrix confusion = metrics.confusionMatrix();
+		System.out.println("Confusion matrix: \n" + confusion);
+		System.out.println("Total rows : " + testData.count());
+
 	}
 
 	/**
@@ -158,6 +181,7 @@ public class ClickThroughRateAnalytics {
 	 * @return
 	 */
 	private static DataFrame modifiyDatFrame(DataFrame dataFrame) {
+		System.out.println(dataFrame.numericColumns());
 		Set<String> numericColumns = new HashSet<String>();
 		if (dataFrame.numericColumns() != null && dataFrame.numericColumns().length() > 0) {
 			scala.collection.Iterator<Expression> iterator = ((Seq<Expression>) dataFrame.numericColumns()).toIterator();
@@ -182,11 +206,14 @@ public class ClickThroughRateAnalytics {
 		// frequency and assigns an index to each word. StringIndexer.fit()
 		// method returns a StringIndexerModel which is a Transformer
 		StringIndexer stringIndexer = new StringIndexer();
+		OneHotEncoder oneHotEncoder = new OneHotEncoder();
 		String allCoumns[] = dataFrame.columns();
 		for (String column : allCoumns) {
 			if (!numericColumns.contains(column)) {
-				dataFrame = stringIndexer.setInputCol(column).setOutputCol(column + "_index").fit(dataFrame).transform(dataFrame);
+				dataFrame = stringIndexer.setInputCol(column).setOutputCol(column + "_index").setHandleInvalid("skip").fit(dataFrame)
+						.transform(dataFrame);
 				dataFrame = dataFrame.drop(column);
+				dataFrame = oneHotEncoder.setInputCol(column + "_index").setOutputCol(column).transform(dataFrame);
 			}
 		}
 
