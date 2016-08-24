@@ -11,44 +11,44 @@ public class ClickThroughRateAnalytics_XGboost {
 
 	public static void main(String[] args) {
 		try {
-			DMatrix trainMat = new DMatrix("/home/raghunandangupta/Downloads/train_1.data");
-			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/test_1.data");
-
+			DMatrix trainMat = new DMatrix("/home/raghunandangupta/Downloads/abcdaa");
+			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/train_1.data");
+			
 			// specify parameters
 			HashMap<String, Object> params = new HashMap<String, Object>();
 
-			params.put("learning_rate", 0.18);
+			params.put("eta", 0.18);
 			params.put("n_estimators", 113);
-			params.put("max_depth", 6);
+			params.put("max_depth", 9);
 			params.put("min_child_weight", 1);
-			params.put("gamma", 0);
+//			params.put("gamma", 0);
 			params.put("subsample", 0.8);
 			params.put("colsample_bytree", 0.8);
 			params.put("objective", "binary:logistic");
 			params.put("nthread", 8);
-			params.put("reg_alpha", 0.001);
+			params.put("alpha", 0.001);
 			params.put("scale_pos_weight", 1);
 			params.put("silent", true);
 			params.put("seed", 27);
 
 			// do 5-fold cross validation
-			int round = 400;
-			int nfold = 5;
+			int round = 500;
+			int nfold = 8;
 			// set additional eval_metrics
 			String[] metrics = new String[] { "auc" };
 
 			String[] evalHist = XGBoost.crossValidation(trainMat, params, round, nfold, metrics, null, null);
 
 			params.put("eval_metric", "logloss");
-			params.put("n_estimators", evalHist.length);
-			params.put("silent", 1);
+			params.put("silent", false);
+			
 			// specify watchList
 			HashMap<String, DMatrix> watches = new HashMap<String, DMatrix>();
 			watches.put("train", trainMat);
 			watches.put("test", testMat);
 
 			// train a booster
-			Booster booster = XGBoost.train(trainMat, params, round, watches, null, null);
+			Booster booster = XGBoost.train(trainMat, params, evalHist.length, watches, null, null);
 
 			// predict use 1 tree
 			float[][] predicts1 = booster.predict(trainMat);
