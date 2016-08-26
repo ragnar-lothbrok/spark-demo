@@ -34,17 +34,11 @@
 			<groupId>ml.dmlc</groupId>
 			<artifactId>xgboost</artifactId>
 			<version>0.5</version>
-			<exclusions>
-				<exclusion>
-					<groupId>org.scala-lang</groupId>
-					<artifactId>scala-compiler</artifactId>
-				</exclusion>
-			</exclusions>
 		</dependency>
 		<dependency>
-			<groupId>org.scala-lang</groupId>
-			<artifactId>scala-compiler</artifactId>
-			<version>2.10.5</version>
+			<groupId>ml.dmlc</groupId>
+			<artifactId>xgboost4j-spark</artifactId>
+			<version>0.6</version>
 		</dependency>
 	</dependencies>
 
