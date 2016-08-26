@@ -2,9 +2,11 @@ package com.spark.lograthmicregression;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.apache.commons.lang.ArrayUtils;
@@ -18,16 +20,11 @@ import org.apache.spark.ml.PipelineModel;
 import org.apache.spark.ml.PipelineStage;
 import org.apache.spark.ml.classification.GBTClassificationModel;
 import org.apache.spark.ml.classification.GBTClassifier;
-import org.apache.spark.ml.evaluation.BinaryClassificationEvaluator;
 import org.apache.spark.ml.feature.IndexToString;
 import org.apache.spark.ml.feature.OneHotEncoder;
 import org.apache.spark.ml.feature.StringIndexer;
 import org.apache.spark.ml.feature.StringIndexerModel;
 import org.apache.spark.ml.feature.VectorAssembler;
-import org.apache.spark.ml.param.ParamMap;
-import org.apache.spark.ml.tuning.CrossValidator;
-import org.apache.spark.ml.tuning.CrossValidatorModel;
-import org.apache.spark.ml.tuning.ParamGridBuilder;
 import org.apache.spark.mllib.evaluation.MulticlassMetrics;
 import org.apache.spark.mllib.linalg.Matrix;
 import org.apache.spark.sql.DataFrame;
@@ -40,7 +37,6 @@ import org.apache.spark.sql.types.DataTypes;
 
 import com.google.common.collect.ImmutableMap;
 
-import ml.dmlc.xgboost4j.java.XGBoostError;
 import scala.Tuple2;
 import scala.collection.mutable.Seq;
 
@@ -50,18 +46,18 @@ public class ClickThroughRateAnalytics {
 
 	private static SimpleDateFormat sdf = new SimpleDateFormat("yyMMddHH");
 
-	public static void main(String[] args) throws XGBoostError {
-		
+	public static void main(String[] args) {
+
 		final SparkConf sparkConf = new SparkConf().setAppName("Click Analysis").setMaster("local");
 
 		try (JavaSparkContext javaSparkContext = new JavaSparkContext(sparkConf)) {
 
 			SQLContext sqlContext = new SQLContext(javaSparkContext);
 			DataFrame dataFrame = sqlContext.read().format("com.databricks.spark.csv").option("inferSchema", "true").option("header", "true")
-					.load("/home/raghunandangupta/Downloads/splits/sub-testtaa");
+					.load(args[0]);
 
 			// This will keep data in memory
-			dataFrame.cache();
+//			dataFrame.cache();
 
 			// This will describe the column
 			dataFrame.describe("hour").show();
@@ -122,29 +118,29 @@ public class ClickThroughRateAnalytics {
 			VectorAssembler vectorAssembler = new VectorAssembler().setInputCols(predictors).setOutputCol("features_index");
 			dataFrame = vectorAssembler.transform(dataFrame);
 
-			dataFrame = dataFrame.select("indexedclick", "features_index").cache();
+			dataFrame = dataFrame.select("indexedclick", "features_index");
 			DataFrame[] splits = dataFrame.randomSplit(new double[] { 0.7, 0.3 });
 			DataFrame trainingData = splits[0];
 			DataFrame testData = splits[1];
-			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(20).setMaxBins(26900)
-					.setMaxDepth(20).setMinInfoGain(0.0001).setStepSize(0.00001).setSeed(200).setLossType("logistic").setSubsamplingRate(0.2);
+			GBTClassifier gbt = new GBTClassifier().setLabelCol("indexedclick").setFeaturesCol("features_index").setMaxIter(20)
+					.setMaxBins(((Long) maxBin).intValue()).setMaxDepth(20).setMinInfoGain(0.0001).setStepSize(0.00001).setSeed(200)
+					.setLossType("logistic").setSubsamplingRate(0.2);
 
-			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("rawPrediction")
+			IndexToString labelConverter = new IndexToString().setInputCol("prediction").setOutputCol("predictedLabel")
 					.setLabels(stringIndexerModel.labels());
 
 			Pipeline pipeline = new Pipeline().setStages(new PipelineStage[] { gbt, labelConverter });
 
-			// Cross validator
-			BinaryClassificationEvaluator binaryClassificationEvaluator = new BinaryClassificationEvaluator();
-			ParamMap[] paramMaps = new ParamGridBuilder().build();
-			CrossValidator crossValidator = new CrossValidator().setEvaluator(binaryClassificationEvaluator).setNumFolds(3)
-					.setEstimatorParamMaps(paramMaps).setEstimator(pipeline);
-			CrossValidatorModel crossValidatorModel = crossValidator.fit(trainingData);
+//			BinaryClassificationEvaluator binaryClassificationEvaluator = new BinaryClassificationEvaluator();
+//			ParamMap[] paramMaps = new ParamGridBuilder().build();
+//			CrossValidator crossValidator = new CrossValidator().setEvaluator(binaryClassificationEvaluator).setNumFolds(3)
+//					.setEstimatorParamMaps(paramMaps).setEstimator(pipeline);
+//			CrossValidatorModel crossValidatorModel = crossValidator.fit(trainingData);
 
 			PipelineModel pipelineModel = pipeline.fit(trainingData);
 
 			predictions(pipelineModel, testData);
-			predictions(crossValidatorModel, testData);
+			// predictions(crossValidatorModel, testData);
 
 			GBTClassificationModel gbtModel = (GBTClassificationModel) (pipelineModel.stages()[0]);
 			// System.out.println("Learned classification GBT model:\n" +
@@ -155,7 +151,7 @@ public class ClickThroughRateAnalytics {
 
 	private static void predictions(Model model, DataFrame testData) {
 		DataFrame predictions = model.transform(testData);
-		predictions = predictions.select("rawPrediction", "indexedclick");
+		predictions = predictions.select("predictedLabel", "indexedclick");
 		JavaRDD<Tuple2<Object, Object>> predictionAndLabels = predictions.javaRDD().map(new Function<Row, Tuple2<Object, Object>>() {
 			private static final long serialVersionUID = 1L;
 
@@ -180,8 +176,9 @@ public class ClickThroughRateAnalytics {
 	 * @param dataFrame
 	 * @return
 	 */
+	static long maxBin = 0;
+
 	private static DataFrame modifiyDatFrame(DataFrame dataFrame) {
-		System.out.println(dataFrame.numericColumns());
 		Set<String> numericColumns = new HashSet<String>();
 		if (dataFrame.numericColumns() != null && dataFrame.numericColumns().length() > 0) {
 			scala.collection.Iterator<Expression> iterator = ((Seq<Expression>) dataFrame.numericColumns()).toIterator();
@@ -208,16 +205,29 @@ public class ClickThroughRateAnalytics {
 		StringIndexer stringIndexer = new StringIndexer();
 		OneHotEncoder oneHotEncoder = new OneHotEncoder();
 		String allCoumns[] = dataFrame.columns();
+		List<String> nonNumericColumns = new ArrayList<String>();
 		for (String column : allCoumns) {
 			if (!numericColumns.contains(column)) {
-				dataFrame = stringIndexer.setInputCol(column).setOutputCol(column + "_index").setHandleInvalid("skip").fit(dataFrame)
-						.transform(dataFrame);
+				dataFrame = stringIndexer.setInputCol(column).setOutputCol(column + "_index")
+						/* .setHandleInvalid("skip") */.fit(dataFrame).transform(dataFrame);
 				dataFrame = dataFrame.drop(column);
 				dataFrame = oneHotEncoder.setInputCol(column + "_index").setOutputCol(column).transform(dataFrame);
+				nonNumericColumns.add(column);
+			}
+		}
+
+		for (int i = 0; i < nonNumericColumns.size(); i++) {
+			String columnName = nonNumericColumns.get(i);
+			long temp = dataFrame.select(columnName).distinct().count();
+			if (maxBin < temp) {
+				maxBin = temp;
 			}
 		}
 
 		dataFrame.printSchema();
+		
+		System.gc();
+		Runtime.getRuntime().gc();
 		return dataFrame;
 	}
 

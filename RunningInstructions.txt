@@ -7,3 +7,5 @@
 
 
 http://xgboost.readthedocs.io/en/latest/parameter.html#general-parameters
+
+mvn install:install-file -Dfile=/home/gitPro/xgboost/jvm-packages/xgboost4j/target/xgboost4j-0.5-jar-with-dependencies.jar -DgroupId=ml.dmlc -DartifactId=xgboost-jvm -Dversion=0.5 -Dpackaging=jar -DgeneratePom=true
