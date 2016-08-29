@@ -57,7 +57,7 @@ public class ClickThroughRateAnalytics {
 					.load(args[0]);
 
 			// This will keep data in memory
-//			dataFrame.cache();
+			// dataFrame.cache();
 
 			// This will describe the column
 			dataFrame.describe("hour").show();
@@ -131,11 +131,14 @@ public class ClickThroughRateAnalytics {
 
 			Pipeline pipeline = new Pipeline().setStages(new PipelineStage[] { gbt, labelConverter });
 
-//			BinaryClassificationEvaluator binaryClassificationEvaluator = new BinaryClassificationEvaluator();
-//			ParamMap[] paramMaps = new ParamGridBuilder().build();
-//			CrossValidator crossValidator = new CrossValidator().setEvaluator(binaryClassificationEvaluator).setNumFolds(3)
-//					.setEstimatorParamMaps(paramMaps).setEstimator(pipeline);
-//			CrossValidatorModel crossValidatorModel = crossValidator.fit(trainingData);
+			// BinaryClassificationEvaluator binaryClassificationEvaluator = new
+			// BinaryClassificationEvaluator();
+			// ParamMap[] paramMaps = new ParamGridBuilder().build();
+			// CrossValidator crossValidator = new
+			// CrossValidator().setEvaluator(binaryClassificationEvaluator).setNumFolds(3)
+			// .setEstimatorParamMaps(paramMaps).setEstimator(pipeline);
+			// CrossValidatorModel crossValidatorModel =
+			// crossValidator.fit(trainingData);
 
 			PipelineModel pipelineModel = pipeline.fit(trainingData);
 
@@ -143,12 +146,12 @@ public class ClickThroughRateAnalytics {
 			// predictions(crossValidatorModel, testData);
 
 			GBTClassificationModel gbtModel = (GBTClassificationModel) (pipelineModel.stages()[0]);
-			// System.out.println("Learned classification GBT model:\n" +
-			// gbtModel.toDebugString());
+			System.out.println("Learned classification GBT model:\n" + gbtModel.toDebugString());
 
 		}
 	}
 
+	@SuppressWarnings("rawtypes")
 	private static void predictions(Model model, DataFrame testData) {
 		DataFrame predictions = model.transform(testData);
 		predictions = predictions.select("predictedLabel", "indexedclick");
@@ -225,7 +228,7 @@ public class ClickThroughRateAnalytics {
 		}
 
 		dataFrame.printSchema();
-		
+
 		System.gc();
 		Runtime.getRuntime().gc();
 		return dataFrame;

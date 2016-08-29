@@ -1,6 +1,8 @@
 package com.spark.lograthmicregression;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import ml.dmlc.xgboost4j.java.Booster;
 import ml.dmlc.xgboost4j.java.DMatrix;
@@ -11,9 +13,13 @@ public class ClickThroughRateAnalytics_XGboost {
 
 	public static void main(String[] args) {
 		try {
+
 			DMatrix trainMat = new DMatrix("/home/raghunandangupta/Downloads/abcdaa");
-			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/train_1.data");
-			
+//			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/train_1.data");
+			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/test_200.data");
+
+			predictModel(trainMat, testMat);
+
 			// specify parameters
 			HashMap<String, Object> params = new HashMap<String, Object>();
 
@@ -21,7 +27,7 @@ public class ClickThroughRateAnalytics_XGboost {
 			params.put("n_estimators", 113);
 			params.put("max_depth", 9);
 			params.put("min_child_weight", 1);
-//			params.put("gamma", 0);
+			// params.put("gamma", 0);
 			params.put("subsample", 0.8);
 			params.put("colsample_bytree", 0.8);
 			params.put("objective", "binary:logistic");
@@ -41,14 +47,15 @@ public class ClickThroughRateAnalytics_XGboost {
 
 			params.put("eval_metric", "logloss");
 			params.put("silent", false);
-			
+
 			// specify watchList
 			HashMap<String, DMatrix> watches = new HashMap<String, DMatrix>();
 			watches.put("train", trainMat);
 			watches.put("test", testMat);
 
 			// train a booster
-			Booster booster = XGBoost.train(trainMat, params, evalHist.length, watches, null, null);
+			Booster booster = null;
+			booster = XGBoost.train(trainMat, params, evalHist.length, watches, null, null);
 
 			// predict use 1 tree
 			float[][] predicts1 = booster.predict(trainMat);
@@ -65,6 +72,38 @@ public class ClickThroughRateAnalytics_XGboost {
 			System.out.println("error of predicts1: " + eval.eval(predicts1, trainMat));
 			System.out.println("error of predicts2: " + eval.eval(predicts2, testMat));
 
+		} catch (XGBoostError e) {
+			e.printStackTrace();
+		}
+	}
+
+	private static void predictModel(DMatrix trainMat, DMatrix testMat) throws XGBoostError {
+		List<Booster> list = new ArrayList<Booster>();
+		for(int i=0;i<10;i++){
+			list.add(XGBoost.loadModel("/home/raghunandangupta/Downloads/001.model"));
+		}
+		for (int i = 0; i < 1000; i++) {
+			new Thread(new Runnable() {
+				public void run() {
+					try {
+						long ms = System.currentTimeMillis();
+//						System.out.println(ms);
+						float[][] predicts2 = list.get(0).predict(testMat);
+						System.out.println("##############"+Thread.currentThread().getName()+" " + ((System.currentTimeMillis() - ms)/1000.0));
+					} catch (XGBoostError e) {
+						e.printStackTrace();
+					}
+				}
+			})/*.start()*/;
+		}
+		
+		try {
+			for (int i = 0; i < 1000; i++) {
+				long ms = System.currentTimeMillis();
+//			System.out.println(ms);
+				float[][] predicts2 = list.get(0).predict(testMat);
+				System.out.println("##############"+Thread.currentThread().getName()+" " + ((System.currentTimeMillis() - ms)/1.0));
+			}
 		} catch (XGBoostError e) {
 			e.printStackTrace();
 		}
