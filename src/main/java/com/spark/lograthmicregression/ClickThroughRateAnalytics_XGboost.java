@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 
+import com.spark.lograthmicregression.CustomEval;
+
 import ml.dmlc.xgboost4j.java.Booster;
 import ml.dmlc.xgboost4j.java.DMatrix;
 import ml.dmlc.xgboost4j.java.XGBoost;
@@ -16,8 +18,8 @@ public class ClickThroughRateAnalytics_XGboost {
 
 			DMatrix trainMat = new DMatrix("/home/raghunandangupta/Downloads/abcdaa");
 //			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/train_1.data");
-			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/test_200.data");
-
+			DMatrix testMat = new DMatrix("/home/raghunandangupta/Downloads/one.data");
+			trainMat=null;
 			predictModel(trainMat, testMat);
 
 			// specify parameters
@@ -82,31 +84,19 @@ public class ClickThroughRateAnalytics_XGboost {
 		for(int i=0;i<10;i++){
 			list.add(XGBoost.loadModel("/home/raghunandangupta/Downloads/001.model"));
 		}
-		for (int i = 0; i < 1000; i++) {
-			new Thread(new Runnable() {
-				public void run() {
-					try {
-						long ms = System.currentTimeMillis();
-//						System.out.println(ms);
-						float[][] predicts2 = list.get(0).predict(testMat);
-						System.out.println("##############"+Thread.currentThread().getName()+" " + ((System.currentTimeMillis() - ms)/1000.0));
-					} catch (XGBoostError e) {
-						e.printStackTrace();
-					}
-				}
-			})/*.start()*/;
-		}
-		
 		try {
-			for (int i = 0; i < 1000; i++) {
+			for (int i = 0; i < 1; i++) {
 				long ms = System.currentTimeMillis();
 //			System.out.println(ms);
 				float[][] predicts2 = list.get(0).predict(testMat);
+				CustomEval eval = new CustomEval();
+				System.out.println("error of predicts1: " + eval.eval(predicts2, testMat));
 				System.out.println("##############"+Thread.currentThread().getName()+" " + ((System.currentTimeMillis() - ms)/1.0));
 			}
 		} catch (XGBoostError e) {
 			e.printStackTrace();
 		}
+		System.out.println();
 	}
 
 }

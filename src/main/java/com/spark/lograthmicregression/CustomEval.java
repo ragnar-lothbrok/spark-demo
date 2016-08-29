@@ -33,6 +33,7 @@ public class CustomEval implements IEvaluation {
 		}
 		int nrow = predicts.length;
 		for (int i = 0; i < nrow; i++) {
+			System.out.println(predicts[i][0]);
 			if (labels[i] == 0f) {
 				if (predicts[i][0] > 0.5) {
 					confusionMatrix[1][2]++;
