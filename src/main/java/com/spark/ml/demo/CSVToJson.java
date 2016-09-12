@@ -6,6 +6,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 
 import com.google.gson.Gson;
+import com.spark.ml.demo.AdServerProductRequest;
 
 public class CSVToJson {
 
@@ -33,7 +34,7 @@ public class CSVToJson {
 						return sd;
 					}
 				});
-		System.out.println(new Gson().toJson(records.collect().subList(0, 2)));
+		System.out.println(new Gson().toJson(records.collect().subList(0, 300)));
 		sc.close();
 	}
 }

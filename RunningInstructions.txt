@@ -12,3 +12,14 @@ mvn install:install-file -Dfile=/home/gitPro/xgboost/jvm-packages/xgboost4j/targ
 mvn install:install-file -Dfile=/home/gitPro/xgboost/jvm-packages/xgboost4j/target/xgboost4j-0.5-jar-with-dependencies.jar -DgroupId=ml.dmlc -DartifactId=xgboost -Dversion=0.5 -Dpackaging=jar -DgeneratePom=true
 
 mvn install:install-file -Dfile=xgboost4j-0.5-jar-with-dependencies.jar -DgroupId=ml.dmlc -DartifactId=xgboost4j -Dversion=0.7 -Dpackaging=jar -DgeneratePom=true
+
+
+For hadoop :
+https://acadgild.com/blog/mapreduce-use-case-youtube-data-analysis/
+
+
+hdfs dfs -mkdir -p /project_inputs/inputs
+hdfs dfs -ls /
+hdfs dfs -put /home/Desktop/CSV/module3and4datafiles/* /project_inputs/inputs
+
+hadoop jar /home/gitPro/spark-demo/target/spark-demo-0.0.1-SNAPSHOT.jar com.hadoop.skillspeed.mr.CountLines /mr_inputs/inputs/Module_3_Ex1.txt output2

@@ -1,0 +1,14 @@
+Amy,23,female,45
+Jack,34,male,89
+Joe,67,male,97
+Anne,38,female ,53
+David,25,male,27
+Pauolo,78,male,95
+Steve,34,male,79
+Shaun,52,male,69
+Kelly,7,female,98
+Don,9,male,37
+Dino,7,male,23
+Diana,6,female,93
+Claudia,87,female,72
+Linda,56,female,92
