@@ -6,10 +6,10 @@ public class AggregateData implements Serializable {
 
 	private static final long serialVersionUID = 1L;
 
-	private Double count;
-	private Double sum;
-	private Double max;
-	private Double min;
+	private Double count = 0.0;
+	private Double sum = 0.0;
+	private Double max = 0.0;
+	private Double min = 0.0;
 
 	public Double getCount() {
 		return count;

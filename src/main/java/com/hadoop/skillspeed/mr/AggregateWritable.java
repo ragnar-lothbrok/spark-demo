@@ -8,11 +8,19 @@ import org.apache.hadoop.io.Writable;
 
 public class AggregateWritable implements Writable {
 
-	private AggregateData aggregateData;
+	private AggregateData aggregateData = new AggregateData();
+
+	public AggregateWritable() {
+
+	}
 
 	public AggregateWritable(AggregateData aggregateData) {
 		super();
 		this.aggregateData = aggregateData;
+	}
+
+	public AggregateData getAggregateData() {
+		return aggregateData;
 	}
 
 	@Override
