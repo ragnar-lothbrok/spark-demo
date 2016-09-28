@@ -8,7 +8,7 @@ import org.apache.spark.api.java.JavaSparkContext;
 
 import scala.Tuple2;
 
-public class WordCount<T> {
+public class WordCountJob<T> {
 
 	public static void main(String[] args) {
 

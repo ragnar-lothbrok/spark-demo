@@ -15,7 +15,7 @@ import scala.Tuple2;
 import scala.Tuple3;
 
 //https://acadgild.com/blog/spark-use-case-uber-data-analysis/
-public class MaxTrip {
+public class MaxTripJob {
 
 	@SuppressWarnings("deprecation")
 	public static void main(String[] args) {
