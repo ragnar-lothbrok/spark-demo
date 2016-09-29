@@ -22,37 +22,43 @@ public class WeatherAnalyserML {
 		SparkConf sparkConf = new SparkConf().setAppName("Java Decision Tree Classification");
 		sparkConf.setMaster("local");
 		JavaSparkContext javaSparkContext = new JavaSparkContext(sparkConf);
-
 		SQLContext sqlContext = new SQLContext(javaSparkContext);
+		
+		final DataFrame inputDF = sqlContext.read().format("com.databricks.spark.csv").option("header", "true").load("src/main/resources/datatraining.txt");
 
-		DataFrame data = sqlContext.read().format("com.databricks.spark.csv").option("header", "true").load("src/main/resources/datatraining.txt");
+		DataFrame filteredDF = inputDF.na().drop(inputDF.columns().length,inputDF.columns());
+		
+		System.out.println(filteredDF.count()+"======"+inputDF.count());
 
 		// Create view and execute query to convert types as, by default, all
 		// columns have string types
-		data.registerTempTable("weather_traning_data");
+		inputDF.registerTempTable("weather_traning_data");
 
-		data = sqlContext.sql("SELECT cast(Temperature as float) Temperature, cast(Humidity as float) Humidity, "
+		final DataFrame modifiedDF = sqlContext.sql("SELECT cast(Temperature as float) Temperature, cast(Humidity as float) Humidity, "
 				+ "cast(Light as float) Light, cast(CO2 as float) CO2, " + "cast(HumidityRatio as float) HumidityRatio, "
 				+ "cast(Occupancy as int) Occupancy FROM weather_traning_data");
-		
-		data.show(5);
+
+		modifiedDF.show(5);
 
 		// Combine multiple input columns to a Vector using Vector Assembler
 		// utility
 		VectorAssembler vectorAssembler = new VectorAssembler()
 				.setInputCols(new String[] { "Temperature", "Humidity", "Light", "CO2", "HumidityRatio" }).setOutputCol("features");
 
-		DataFrame featuresData = vectorAssembler.transform(data);
-		
-		// Indexing is done to improve the execution times as comparing indexes is much cheaper than comparing strings/floats
+		DataFrame featuresData = vectorAssembler.transform(modifiedDF);
 
-		// Index labels, adding metadata to the label column (Occupancy). Fit on whole dataset to include all labels in index.
+		// Indexing is done to improve the execution times as comparing indexes
+		// is much cheaper than comparing strings/floats
+
+		// Index labels, adding metadata to the label column (Occupancy). Fit on
+		// whole dataset to include all labels in index.
 		final StringIndexerModel labelIndexer = new StringIndexer().setInputCol("Occupancy").setOutputCol("indexedLabel").fit(featuresData);
 
 		// Index features vector
 		final VectorIndexerModel featureIndexer = new VectorIndexer().setInputCol("features").setOutputCol("indexedFeatures").fit(featuresData);
 
-		// Split the data into training and test sets (30% held out for testing).
+		// Split the data into training and test sets (30% held out for
+		// testing).
 		DataFrame[] frames = featuresData.randomSplit(new double[] { 0.7, 0.3 });
 
 		final DecisionTreeClassifier dt = new DecisionTreeClassifier().setLabelCol("indexedLabel").setFeaturesCol("indexedFeatures");
