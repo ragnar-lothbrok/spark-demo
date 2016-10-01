@@ -1,4 +1,4 @@
-package com.spark.sql;
+package com.spark.streams;
 
 import java.util.ArrayList;
 import java.util.List;
