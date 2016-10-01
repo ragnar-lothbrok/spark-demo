@@ -3,6 +3,7 @@ package com.spark.kmeans;
 import java.util.ArrayList;
 import java.util.List;
 
+//http://www.dataonfocus.com/k-means-clustering-example-and-algorithm/
 public class KMeans {
 
 	// Number of Clusters. This metric should be related to the number of points
