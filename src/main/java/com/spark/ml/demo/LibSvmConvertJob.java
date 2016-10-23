@@ -1,19 +1,14 @@
 package com.spark.ml.demo;
 
-import java.nio.charset.StandardCharsets;
-
 import org.apache.spark.SparkConf;
 import org.apache.spark.api.java.JavaSparkContext;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.SQLContext;
-import org.apache.spark.sql.types.DataTypes;
-
-import com.google.common.hash.Hashing;
 
 public class LibSvmConvertJob {
-	
+
 	private static final String SPACE = " ";
 	private static final String COLON = ":";
 
@@ -26,32 +21,23 @@ public class LibSvmConvertJob {
 		SQLContext sqlContext = new SQLContext(javaSparkContext);
 
 		DataFrame inputDF = sqlContext.read().format("com.databricks.spark.csv").option("header", "true")
-				.load("/home/raghunandangupta/inputfiles/zipcode.csv");
-		
-		inputDF.printSchema();
-		
-		sqlContext.udf().register("convertToNull", (String v1) -> (v1.trim().length() > 0 ? v1.trim() : null), DataTypes.StringType);
+				.load("/home/raghunandangupta/Downloads/soc_gen_data/train.csv");
 
-		inputDF = inputDF.selectExpr("convertToNull(zip)","convertToNull(city)","convertToNull(state)","convertToNull(latitude)","convertToNull(longitude)","convertToNull(timezone)","convertToNull(dst)").na().drop();
+		inputDF.printSchema();
 
 		inputDF.javaRDD().map(new Function<Row, String>() {
 			private static final long serialVersionUID = 1L;
+
 			@Override
 			public String call(Row v1) throws Exception {
 				StringBuilder sb = new StringBuilder();
-				sb.append(hashCode(v1.getString(0))).append("\t")   //Resultant column
-				.append("1"+COLON+hashCode(v1.getString(1))).append(SPACE)
-				.append("2"+COLON+hashCode(v1.getString(2))).append(SPACE)
-				.append("3"+COLON+hashCode(v1.getString(3))).append(SPACE)
-				.append("4"+COLON+hashCode(v1.getString(4))).append(SPACE)
-				.append("5"+COLON+hashCode(v1.getString(5))).append(SPACE)
-				.append("6"+COLON+hashCode(v1.getString(6)));
+				sb.append(Integer.parseInt(v1.getString(101)) == -1 ? 0 : v1.getString(101)).append("\t"); // Resultant column
+				for (int i = 0; i <= 100; i++) {
+					sb.append((i+1) + COLON + v1.getString(0)).append(SPACE);
+				}
 				return sb.toString();
 			}
-			private String hashCode(String value) {
-				return Math.abs(Hashing.murmur3_32().hashString(value, StandardCharsets.UTF_8).hashCode()) + "";
-			}
-		}).repartition(1).saveAsTextFile("/home/raghunandangupta/inputfiles/zipcode");
+		}).repartition(1).saveAsTextFile("/home/raghunandangupta/Downloads/soc_gen_data/train");
 
 	}
 }
